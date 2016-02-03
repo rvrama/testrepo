@@ -1,0 +1,542 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Hotels/ATMs/Banks/Schools/Hospitals using Google API V3</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+        }
+    </style>
+
+    <style>
+        table {
+            font-size: 12px;
+        }
+
+        #map-canvas {
+            width: 540px;
+            height:320px;
+            margin:20px 0px 0px 20px
+        }
+
+        #listing {
+            position:absolute;
+            width: 300px;
+            height: 340px;
+            overflow: auto;
+            left: 570px;
+            top:55px;
+            cursor: pointer;
+            overflow-x: hidden;
+        }
+
+        #Nearbys {
+            width: 200px;
+            font-size: 14px;
+            padding: 4px;
+            margin: 10px 0px 0px 10px;
+            background-color: #fff;
+        }
+
+        #locationField {
+            position: absolute;
+            width: 190px;
+            height: 14px;
+            left: 370px;
+            top: 15px;
+            margin: 0px 0px 0px 20px;
+            z-index: 5;
+            background-color: #fff;
+        }
+
+        #lblOne {
+            position: absolute;
+            top: 15px;
+            left:250px;
+            font-size:14px;
+            margin: 10px 0px 0px 20px;
+        }
+
+        #search {
+            width:32px;
+            height:32px;
+            position:absolute;
+            top:18px;
+            left:600px;
+            border:none;
+        }
+        
+        #autocomplete {
+            width: 100%;
+        }
+
+        .placeIcon {
+            width: 20px;
+            height: 34px;
+            margin: 4px;
+        }
+
+        .hotelIcon {
+            width: 24px;
+            height: 24px;
+        }
+
+        #resultsTable {
+            border-collapse: collapse;
+            width: 240px;
+            margin-bottom:5px;
+        }
+
+ 
+        #rating {
+            font-size: 13px;
+            font-family: Arial Unicode MS;
+        }
+
+        .iw_table_row {
+            height: 18px;
+        }
+
+        .iw_attribute_name {
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .iw_table_icon {
+            text-align: right;
+        }
+    </style>
+    <script src='https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js'></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=places"></script>
+    <script>
+        // This example uses the autocomplete feature of the Google Places API.
+        // It allows the user to find all hotels in a given place, within a given
+        // country. It then displays markers for all the hotels returned,
+        // with on-click details for each hotel.
+
+        var map, places, infoWindow;
+        var markers = [];
+        var autocomplete;
+        var MARKER_PATH = 'https://maps.gstatic.com/intl/en_us/mapfiles/marker_green';
+        var hostnameRegexp = new RegExp('^https?://.+?/');
+        var defaultLocation = new google.maps.LatLng(11.695273, 78.824158);  //Chennai location
+        var geocoder = new google.maps.Geocoder();
+        var latlng;
+
+
+        function initialize() {
+
+            setMyLocation();
+
+            var myOptions = {
+                zoom: 4,
+                center: defaultLocation, 
+                mapTypeControl: true,
+                panControl: false,
+                zoomControl: true,
+                streetViewControl: false
+
+            };
+
+            map = new google.maps.Map(document.getElementById('map-canvas'), myOptions);
+
+            infoWindow = new google.maps.InfoWindow({
+                content: document.getElementById('info-content')
+            });
+
+            // Create the autocomplete object and associate it with the UI input control.
+            autocomplete = new google.maps.places.Autocomplete(
+                (document.getElementById('autocomplete')),
+                {
+               });
+            places = new google.maps.places.PlacesService(map);
+
+           google.maps.event.addListener(autocomplete, 'place_changed', onPlaceChanged);
+           
+           $('#search').click(function () {
+               setLocation(latlng);
+           });
+
+           $('#Nearbys').change(function () {
+               setLocation(latlng);
+           });
+
+            //reset the map, results, marker etc
+            setAutocomplete();
+        }
+
+       
+        //To set my current location in the map
+        function setMyLocation() {
+            var loc = {};
+           
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    latlng = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+                    geocoder.geocode({ 'latLng': latlng }, function (results, status) {
+
+                        if (status == google.maps.GeocoderStatus.OK) {
+                            if (results[1]) {
+                                $('#autocomplete').val(results[1].formatted_address);
+                                setLocation(latlng);
+                            } else {
+                                alert('No results found');
+                            }
+                        } else {
+                            alert('Geocoder failed due to: ' + status);
+                        }
+                    });
+                });
+            }
+        }
+
+
+        function setLocation(location)
+        {
+            map.panTo(location);
+            map.setZoom(15);
+            search();
+        }
+
+         // When the user selects a city, get the place details for the city and
+        // zoom the map in on the city.
+        function onPlaceChanged() {
+            var place = autocomplete.getPlace();
+            if (place.geometry) {
+                latlng = place.geometry.location;
+                setLocation(place.geometry.location);
+            } else {
+                document.getElementById('autocomplete').placeholder = 'Type Area/Locality';
+            }
+        }
+
+
+        // Search for choosen type in the selected area, within the viewport of the map.
+        function search() {
+            var search = {
+                bounds: map.getBounds(),
+                types: [$('#Nearbys').val()]
+            };
+
+            places.nearbySearch(search, function (results, status) {
+                if (status == google.maps.places.PlacesServiceStatus.OK) {
+                    clearResults();
+                    clearMarkers();
+                    // Create a marker for each hotel found, and
+                    // assign a letter of the alphabetic to each marker icon.
+                    for (var i = 0; i < results.length; i++) {
+                        var markerLetter = String.fromCharCode('A'.charCodeAt(0) + i);
+                        var markerIcon = MARKER_PATH + markerLetter + '.png';
+                        // Use marker animation to drop the icons incrementally on the map.
+                        markers[i] = new google.maps.Marker({
+                            position: results[i].geometry.location,
+                            animation: google.maps.Animation.DROP,
+                            icon: markerIcon
+                        });
+                        // If the user clicks a hotel marker, show the details of that hotel
+                        // in an info window.
+                        markers[i].placeResult = results[i];
+                        google.maps.event.addListener(markers[i], 'click', showInfoWindow);
+                        setTimeout(dropMarker(i), i * 100);
+                        addResult(results[i], i);
+                    }
+                }
+                else //if the result is empty
+                {
+                    alert('No matching result found for the given search.');
+                    setAutocomplete();
+                }
+            });
+        }
+
+        //clear the markers made by the result
+        function clearMarkers() {
+            for (var i = 0; i < markers.length; i++) {
+                if (markers[i]) {
+                    markers[i].setMap(null);
+                }
+            }
+            markers = [];
+        }
+
+        //reset the map, results, marker etc
+        function setAutocomplete() {
+                autocomplete.setComponentRestrictions([]);
+                map.setCenter(defaultLocation);
+                map.setZoom(5);
+            clearResults();
+            clearMarkers();
+        }
+
+        //show the marker icon on the map
+        function dropMarker(i) {
+            return function () {
+                markers[i].setMap(map);
+            };
+        }
+
+        //show the info content like address, telephone, website on the chosen marker
+        function addResult(result, i) {
+            var results = document.getElementById('results');
+            var markerLetter = String.fromCharCode('A'.charCodeAt(0) + i);
+            var markerIcon = MARKER_PATH + markerLetter + '.png';
+
+            var tr = document.createElement('tr');
+            tr.style.backgroundColor = (i % 2 == 0 ? '#F0F0F0' : '#666666');
+            tr.onclick = function () {
+                google.maps.event.trigger(markers[i], 'click');
+            };
+
+            var iconTd = document.createElement('td');
+            var nameTd = document.createElement('td');
+            var icon = document.createElement('img');
+            icon.src = markerIcon;
+            icon.setAttribute('class', 'placeIcon');
+            icon.setAttribute('className', 'placeIcon');
+            var name = document.createTextNode(result.name);
+            iconTd.appendChild(icon);
+            nameTd.appendChild(name);
+            tr.appendChild(iconTd);
+            tr.appendChild(nameTd);
+            results.appendChild(tr);
+        }
+
+        //clear the result listing
+        function clearResults() {
+            var results = document.getElementById('results');
+            while (results.childNodes[0]) {
+                results.removeChild(results.childNodes[0]);
+            }
+        }
+
+      
+
+        // Get the place details for choosen type. Show the information in an info window,
+        // anchored on the marker for the hotel that the user selected.
+        function showInfoWindow() {
+            var marker = this;
+            places.getDetails({ reference: marker.placeResult.reference },
+                function (place, status) {
+                    if (status != google.maps.places.PlacesServiceStatus.OK) {
+                        return;
+                    }
+                    infoWindow.open(map, marker);
+                    buildIWContent(place);
+                });
+        }
+
+        // Load the place information into the HTML elements used by the info window.
+        function buildIWContent(place) {
+            document.getElementById('iw-icon').innerHTML = '<img class="hotelIcon" ' +
+                'src="' + place.icon + '"/>';
+            document.getElementById('iw-url').innerHTML = '<b><a href="' + place.url +
+                '">' + place.name + '</a></b>';
+            document.getElementById('iw-address-lbl').textContent = "Address:";
+            
+            document.getElementById('iw-address').textContent = place.vicinity;
+
+            if (place.formatted_phone_number) {
+                document.getElementById('iw-phone-row').style.display = '';
+                document.getElementById('iw-phone-lbl').textContent = "Telephone:";
+                document.getElementById('iw-phone').textContent =
+                    place.formatted_phone_number;
+            } else {
+                document.getElementById('iw-phone-row').style.display = 'none';
+            }
+
+            // Assign a five-star rating to the hotel, using a black star ('&#10029;')
+            // to indicate the rating the hotel has earned, and a white star ('&#10025;')
+            // for the rating points not achieved.
+            if (place.rating) {
+                var ratingHtml = '';
+                for (var i = 0; i < 5; i++) {
+                    if (place.rating < (i + 0.5)) {
+                        ratingHtml += '&#10025;';
+                    } else {
+                        ratingHtml += '&#10029;';
+                    }
+                    document.getElementById('iw-rating-row').style.display = '';
+                    document.getElementById('iw-rating-lbl').textContent = "Rating:";
+                    document.getElementById('iw-rating').innerHTML = ratingHtml;
+                }
+            } else {
+                document.getElementById('iw-rating-row').style.display = 'none';
+            }
+
+            // The regexp isolates the first part of the URL (domain plus subdomain)
+            // to give a short URL for displaying in the info window.
+            if (place.website) {
+                var fullUrl = place.website;
+                var website = hostnameRegexp.exec(place.website);
+                if (website == null) {
+                    website = 'http://' + place.website + '/';
+                    fullUrl = website;
+                }
+                document.getElementById('iw-website-row').style.display = '';
+                document.getElementById('iw-website-lbl').textContent = "Website:";
+                document.getElementById('iw-website').textContent = website;
+            } else {
+                document.getElementById('iw-website-row').style.display = 'none';
+            }
+        }
+
+    </script>
+</head>
+
+<body style="margin:0px; padding:0px;" onload="initialize()">
+
+    <div id="findhotels" style="margin-left:20px">
+        Find:
+        <select id="Nearbys">
+            <option value="accounting"> Accounting</option>
+            <option value="airport"> Airport</option>
+            <option value="amusement_park"> Amusement Park</option>
+            <option value="aquarium"> Aquarium</option>
+            <option value="art_gallery"> Art Gallery</option>
+            <option value="atm"> Atm</option>
+            <option value="bakery"> Bakery</option>
+            <option value="bank"> Bank</option>
+            <option value="bar"> Bar</option>
+            <option value="beauty_salon"> Beauty Salon</option>
+            <option value="bicycle_store"> Bicycle Store</option>
+            <option value="book_store"> Book Store</option>
+            <option value="bowling_alley"> Bowling Alley</option>
+            <option value="bus_station"> Bus Station</option>
+            <option value="cafe"> Cafe</option>
+            <option value="campground"> Campground</option>
+            <option value="car_dealer"> Car Dealer</option>
+            <option value="car_rental"> Car Rental</option>
+            <option value="car_repair"> Car Repair</option>
+            <option value="car_wash"> Car Wash</option>
+            <option value="casino"> Casino</option>
+            <option value="cemetery"> Cemetery</option>
+            <option value="church"> Church</option>
+            <option value="city_hall"> City Hall</option>
+            <option value="clothing_store"> Clothing Store</option>
+            <option value="convenience_store"> Convenience Store</option>
+            <option value="courthouse"> Courthouse</option>
+            <option value="dentist"> Dentist</option>
+            <option value="department_store"> Department Store</option>
+            <option value="doctor"> Doctor</option>
+            <option value="electrician"> Electrician</option>
+            <option value="electronics_store"> Electronics Store</option>
+            <option value="embassy"> Embassy</option>
+            <option value="establishment"> Establishment</option>
+            <option value="finance"> Finance</option>
+            <option value="fire_station"> Fire Station</option>
+            <option value="florist"> Florist</option>
+            <option value="food"> Food</option>
+            <option value="funeral_home"> Funeral Home</option>
+            <option value="furniture_store"> Furniture Store</option>
+            <option value="gas_station"> Gas Station</option>
+            <option value="general_contractor"> General Contractor</option>
+            <option value="grocery_or_supermarket"> Grocery Or Supermarket</option>
+            <option value="gym"> Gym</option>
+            <option value="hair_care"> Hair Care</option>
+            <option value="hardware_store"> Hardware Store</option>
+            <option value="health"> Health</option>
+            <option value="hindu_temple"> Hindu Temple</option>
+            <option value="home_goods_store"> Home Goods Store</option>
+            <option value="hospital"> Hospital</option>
+            <option value="insurance_agency"> Insurance Agency</option>
+            <option value="jewelry_store"> Jewelry Store</option>
+            <option value="laundry"> Laundry</option>
+            <option value="lawyer"> Lawyer</option>
+            <option value="library"> Library</option>
+            <option value="liquor_store"> Liquor Store</option>
+            <option value="local_government_office"> Local Government Office</option>
+            <option value="locksmith"> Locksmith</option>
+            <option value="lodging"> Lodging</option>
+            <option value="meal_delivery"> Meal Delivery</option>
+            <option value="meal_takeaway"> Meal Takeaway</option>
+            <option value="mosque"> Mosque</option>
+            <option value="movie_rental"> Movie Rental</option>
+            <option value="movie_theater"> Movie Theater</option>
+            <option value="moving_company"> Moving Company</option>
+            <option value="museum"> Museum</option>
+            <option value="night_club"> Night Club</option>
+            <option value="painter"> Painter</option>
+            <option value="park"> Park</option>
+            <option value="parking"> Parking</option>
+            <option value="pet_store"> Pet Store</option>
+            <option value="pharmacy"> Pharmacy</option>
+            <option value="physiotherapist"> Physiotherapist</option>
+            <option value="place_of_worship"> Place Of Worship</option>
+            <option value="plumber"> Plumber</option>
+            <option value="police"> Police</option>
+            <option value="post_office"> Post Office</option>
+            <option value="real_estate_agency"> Real Estate Agency</option>
+            <option value="restaurant"> Restaurant</option>
+            <option value="roofing_contractor"> Roofing Contractor</option>
+            <option value="rv_park"> Rv Park</option>
+            <option value="school"> School</option>
+            <option value="shoe_store"> Shoe Store</option>
+            <option value="shopping_mall"> Shopping Mall</option>
+            <option value="spa"> Spa</option>
+            <option value="stadium"> Stadium</option>
+            <option value="storage"> Storage</option>
+            <option value="store"> Store</option>
+            <option value="subway_station"> Subway Station</option>
+            <option value="synagogue"> Synagogue</option>
+            <option value="taxi_stand"> Taxi Stand</option>
+            <option value="train_station"> Train Station</option>
+            <option value="travel_agency"> Travel Agency</option>
+            <option value="university"> University</option>
+            <option value="veterinary_care"> Veterinary Care</option>
+            <option value="zoo"> Zoo</option>
+
+
+        
+        
+        </select>
+    </div>
+    <div id="lblOne">in the given area : </div>
+    <div id="locationField">
+        <input id="autocomplete" placeholder="Type Area/Locality" type="text"/>
+    </div>
+    <div id="searchImg">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTl_nI8QXoOxGLACnp8dM4Ny5_COFRMVtU5Z1ctipQFjnr4Y1Oe" alt="search image" id="search" />
+    </div>
+
+    <div id="map-canvas"></div>
+
+
+    <div id="listing">
+        <table id="resultsTable">
+            <tbody id="results"></tbody>
+        </table>
+    </div>
+
+    <div id="info-content">
+        <table id="infoTable">
+            <tr id="iw-url-row" class="iw_table_row">
+                <td id="iw-icon" class="iw_table_icon"></td>
+                <td id="iw-url"></td>
+            </tr>
+            <tr id="iw-address-row" class="iw_table_row">
+                <td id="iw-address-lbl" class="iw_attribute_name"></td>
+                <td id="iw-address"></td>
+            </tr>
+            <tr id="iw-phone-row" class="iw_table_row">
+                <td id="iw-phone-lbl" class="iw_attribute_name"></td>
+                <td id="iw-phone"></td>
+            </tr>
+            <tr id="iw-rating-row" class="iw_table_row">
+                <td id="iw-rating-lbl" class="iw_attribute_name"></td>
+                <td id="iw-rating"></td>
+            </tr>
+            <tr id="iw-website-row" class="iw_table_row">
+                <td id="iw-website-lbl" class="iw_attribute_name"></td>
+                <td id="iw-website"></td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>
+
